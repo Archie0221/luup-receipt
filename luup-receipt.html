@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"/>
+<title>LUUP × FamilyMart</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #F5F7F9; font-family: 'Noto Sans JP', sans-serif; }
+  .screen { display: none; width: 100%; max-width: 390px; height: 100dvh; margin: 0 auto; background: #fff; flex-direction: column; overflow: hidden; }
+  .screen.active { display: flex; }
+
+  /* カメラ画面だけ position:fixed で完全独立 → Safariのツールバーに影響されない */
+  #screen-camera {
+    position: fixed !important;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    background: #000;
+    z-index: 9999;
+  }
+  #camera-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+  }
+  #camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #preview-img  { display: none; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  #camera-controls {
+    flex-shrink: 0;
+    background: #111;
+    padding: 16px 24px;
+    /* iPhoneホームバー分の余白を自動確保 */
+    padding-bottom: max(40px, env(safe-area-inset-bottom, 40px));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .status-bar { padding: 12px 20px 8px; display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #333; flex-shrink: 0; }
+  .header { padding: 12px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .header .back { font-size: 20px; cursor: pointer; }
+  .header h1 { font-size: 16px; font-weight: 700; }
+  .btn-primary { width: 100%; background: #00C8B4; color: #fff; border: none; border-radius: 14px; padding: 18px 0; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px #00C8B433; font-family: inherit; }
+  .btn-primary:disabled { background: #ddd; box-shadow: none; cursor: not-allowed; }
+  .btn-secondary { width: 100%; background: transparent; color: #aaa; border: none; padding: 16px 0; font-size: 14px; cursor: pointer; font-family: inherit; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #map { z-index: 1; }
+  .spinner { width: 28px; height: 28px; border: 3px solid #00C8B433; border-top: 3px solid #00C8B4; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<!-- Screen 0: APIキー入力 -->
+<div id="screen-apikey" class="screen active">
+  <div class="status-bar"><span>9:41</span><span>● ▲ 🔋</span></div>
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;padding:40px 24px 32px;gap:20px">
+    <div style="font-size:36px">🛴</div>
+    <div style="font-size:20px;font-weight:700;color:#222;text-align:center">LUUP × FamilyMart<br>プロトタイプ</div>
+    <div style="font-size:13px;color:#888;text-align:center;line-height:1.7">
+      2つのAPIキーを入力してください。<br>キーはこの端末内にのみ保存されます。
+    </div>
+    <div style="width:100%;display:flex;flex-direction:column;gap:8px">
+      <label style="font-size:13px;font-weight:600;color:#555">Anthropic APIキー</label>
+      <input id="api-key-input" type="password" placeholder="sk-ant-..." style="width:100%;padding:14px 16px;border:2px solid #ddd;border-radius:12px;font-size:14px;font-family:inherit;outline:none;" oninput="checkApiKey()"/>
+    </div>
+    <div style="width:100%;display:flex;flex-direction:column;gap:8px">
+      <label style="font-size:13px;font-weight:600;color:#555">Google Maps APIキー</label>
+      <input id="gmaps-key-input" type="password" placeholder="AIza..." style="width:100%;padding:14px 16px;border:2px solid #ddd;border-radius:12px;font-size:14px;font-family:inherit;outline:none;" oninput="checkApiKey()"/>
+    </div>
+    <button id="apikey-btn" class="btn-primary" onclick="saveApiKey()" disabled>はじめる →</button>
+    <div style="font-size:11px;color:#ccc;text-align:center">APIキーはlocalStorageに保存されます。</div>
+  </div>
+</div>
+
+<!-- Screen 1: 返却完了 -->
+<div id="screen-complete" class="screen">
+  <div class="status-bar"><span>9:41</span><span>● ▲ 🔋</span></div>
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;padding:40px 24px 32px">
+    <div style="font-size:22px;font-weight:700;color:#222;margin-bottom:4px">お疲れさまでした</div>
+    <div style="font-size:13px;color:#888;margin-bottom:32px">決済金額 ¥415</div>
+    <div style="width:100%;background:#FFF9E6;border:2px solid #FFD700;border-radius:16px;padding:24px 16px;margin-bottom:32px;display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div style="font-size:48px">🍬</div>
+      <div style="font-size:16px;font-weight:700;color:#333;text-align:center;line-height:1.6">
+        レシート送って<br><span style="color:#00C8B4;font-size:22px">ライド30分無料</span>
+      </div>
+      <div style="font-size:12px;color:#888">クロレッツ購入レシートを撮影するだけ</div>
+    </div>
+    <button class="btn-primary" onclick="showScreen('map')">🏪 最寄りのファミリーマートを見る</button>
+    <button class="btn-secondary">とじる</button>
+  </div>
+</div>
+
+<!-- Screen 2: 地図 -->
+<div id="screen-map" class="screen">
+  <div class="status-bar"><span>22:00</span><span>● ▲ 🔋</span></div>
+  <div class="header"><span class="back" onclick="showScreen('complete')">←</span><h1>近くの対象店舗</h1></div>
+  <div style="position:relative;flex:1;display:flex;flex-direction:column;">
+    <div id="map" style="flex:1;min-height:0;"></div>
+    <div id="map-loading" style="position:absolute;top:0;left:0;right:0;bottom:0;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:999;">
+      <div class="spinner"></div>
+      <div style="font-size:13px;color:#888">店舗を検索中...</div>
+    </div>
+    <div style="background:#fff;border-radius:24px 24px 0 0;padding:20px 24px 32px;box-shadow:0 -4px 20px rgba(0,0,0,.1);z-index:1000;position:relative;">
+      <div style="width:40px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:12px;color:#888;margin-bottom:4px">最寄り店舗</div>
+      <div id="nearest-store-name" style="font-size:15px;font-weight:700;margin-bottom:4px">検索中...</div>
+      <div id="nearest-store-dist" style="font-size:12px;color:#00C8B4;margin-bottom:20px"></div>
+      <button class="btn-primary" onclick="goToCamera()">📸 レシートを撮影する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Screen 3: 撮影 — ビデオがフルスクリーン、UIはオーバーレイ -->
+<div id="screen-camera" class="screen" style="position:fixed;top:0;left:0;right:0;bottom:0;width:100%;max-width:none;background:#000;z-index:9999;overflow:hidden;">
+
+  <!-- ビデオ：画面全体を埋める -->
+  <video id="camera-video" autoplay playsinline muted
+    style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"></video>
+  <img id="preview-img" alt="receipt"
+    style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;"/>
+
+  <!-- レシート枠ガイド -->
+  <div id="camera-guide" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+    <div style="width:72%;aspect-ratio:1/2;border:2px solid rgba(0,200,180,0.9);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);"></div>
+  </div>
+
+  <!-- ヘッダー：画面上部にオーバーレイ -->
+  <div style="position:absolute;top:0;left:0;right:0;padding:12px 20px;padding-top:max(12px,env(safe-area-inset-top,12px));background:linear-gradient(to bottom,rgba(0,0,0,0.55),transparent);display:flex;align-items:center;gap:8px;z-index:10;">
+    <span style="font-size:22px;color:#fff;cursor:pointer;line-height:1;" onclick="stopCamera();showScreen('map')">←</span>
+    <span style="font-size:16px;font-weight:700;color:#fff;">レシート撮影</span>
+  </div>
+
+  <!-- シャッターエリア：画面下部にオーバーレイ、ブラウザUIの上に出るようJSで位置調整 -->
+  <div id="cam-bottom" style="position:absolute;left:0;right:0;bottom:0;padding:20px 24px;padding-bottom:max(36px,env(safe-area-inset-bottom,36px));background:linear-gradient(to top,rgba(0,0,0,0.7),transparent);z-index:10;">
+    <div id="ocr-status" style="font-size:12px;color:rgba(255,255,255,0.8);text-align:center;min-height:16px;margin-bottom:8px;"></div>
+    <div id="spinner" style="display:none;margin-bottom:8px;"><div class="spinner"></div></div>
+
+    <!-- 撮影前 -->
+    <div id="shoot-area" style="display:flex;align-items:center;justify-content:center;">
+      <button id="shutter-btn" onclick="capturePhoto()"
+        style="width:76px;height:76px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,0.4);cursor:pointer;flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,0.6);"></button>
+    </div>
+
+    <!-- 撮影後 -->
+    <div id="send-area" style="display:none;flex-direction:column;gap:10px;">
+      <button id="submit-btn" class="btn-primary" onclick="analyzeReceipt()">レシートを送信する →</button>
+      <button class="btn-secondary" style="color:rgba(255,255,255,0.7);" onclick="retakePhoto()">📸 撮り直す</button>
+    </div>
+
+    <input id="file-input" type="file" accept="image/*" style="display:none" onchange="handleFile(this.files[0])"/>  </div>
+</div>
+
+<!-- Screen 4: クーポン -->
+<div id="screen-coupon" class="screen">
+  <div class="status-bar"><span>22:00</span><span>● ▲ 🔋</span></div>
+  <div class="header"><h1>クーポン</h1></div>
+  <div style="flex:1;padding:32px 24px;display:flex;flex-direction:column;align-items:center;gap:24px">
+    <div style="font-size:56px">🎉</div>
+    <div style="font-size:18px;font-weight:700;color:#222;text-align:center">クーポンが発行されました！</div>
+    <div style="width:100%;background:#f0fffd;border:2px solid #00C8B4;border-radius:20px;padding:24px;box-shadow:0 8px 32px #00C8B422">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-size:12px;color:#888;margin-bottom:4px">LUUP ライドクーポン</div>
+          <div style="font-size:26px;font-weight:900;color:#00C8B4;line-height:1.2">ライド料金<br>30分無料</div>
+        </div>
+        <div style="font-size:48px">🛴</div>
+      </div>
+      <div style="border-top:1px dashed #cde;padding-top:14px;font-size:12px;color:#888;line-height:2">
+        <div>対象商品：クロレッツ</div>
+        <div id="coupon-expiry"></div>
+        <div>1回限り有効・ライド開始時に自動適用</div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="showScreen('complete')">🎟️ クーポンを取得する</button>
+  </div>
+</div>
+
+<!-- Screen 5: エラー -->
+<div id="screen-error" class="screen">
+  <div class="status-bar"><span>22:00</span><span>● ▲ 🔋</span></div>
+  <div class="header"><h1>レシート撮影</h1></div>
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;gap:20px">
+    <div id="error-icon" style="font-size:64px"></div>
+    <div id="error-title" style="font-size:20px;font-weight:700;color:#222;text-align:center"></div>
+    <div id="error-sub" style="font-size:14px;color:#888;text-align:center;line-height:1.8"></div>
+    <button class="btn-primary" onclick="showScreen('camera')">📸 もう一度撮影する</button>
+    <details id="debug-area" style="width:100%;font-size:11px;color:#666;word-break:break-all;background:#f9f9f9;padding:10px;border-radius:8px;display:none">
+      <summary style="cursor:pointer;font-weight:700">APIレスポンス（デバッグ）</summary>
+      <pre id="debug-text" style="margin:8px 0 0;white-space:pre-wrap;font-family:monospace"></pre>
+    </details>
+    <button class="btn-secondary" onclick="showScreen('complete')">閉じる</button>
+  </div>
+</div>
+
+<script>
+  // 到着ポート座標（実際はアプリから渡される）
+  const PORT_LAT = 35.65216704259197;
+  const PORT_LNG = 139.6795074240111;
+  const RADIUS = 300;
+
+  let leafletMap = null;
+  let selectedStore = null;
+  let imageBase64 = null;
+
+  function calcDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  async function initMap() {
+    const key = getGmapsKey();
+    if (!key || !window.google) return;
+
+    document.getElementById('map-loading').style.display = 'flex';
+    document.getElementById('nearest-store-name').textContent = '検索中...';
+    document.getElementById('nearest-store-dist').textContent = '';
+
+    const center = { lat: PORT_LAT, lng: PORT_LNG };
+
+    // Google Map初期化（一度だけ）
+    if (!leafletMap) {
+      leafletMap = new google.maps.Map(document.getElementById('map'), {
+        center,
+        zoom: 16,
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+    } else {
+      leafletMap.setCenter(center);
+      leafletMap.setZoom(16);
+      // 既存マーカーをクリア
+      if (window._mapMarkers) window._mapMarkers.forEach(m => m.setMap(null));
+      if (window._mapCircle) window._mapCircle.setMap(null);
+    }
+    window._mapMarkers = [];
+
+    // 到着ポートマーカー（青）
+    const portMarker = new google.maps.Marker({
+      position: center,
+      map: leafletMap,
+      title: '到着ポート',
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 10,
+        fillColor: '#4A90D9',
+        fillOpacity: 1,
+        strokeColor: '#fff',
+        strokeWeight: 3,
+      },
+      zIndex: 10,
+    });
+    window._mapMarkers.push(portMarker);
+
+    // 半径300mの円
+    window._mapCircle = new google.maps.Circle({
+      map: leafletMap,
+      center,
+      radius: RADIUS,
+      strokeColor: '#00C8B4',
+      strokeOpacity: 0.8,
+      strokeWeight: 2,
+      fillColor: '#00C8B4',
+      fillOpacity: 0.07,
+    });
+
+    // Places API (New) - Nearby Search REST endpoint
+    async function searchFamilyMart() {
+      const key = getGmapsKey();
+      try {
+        const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': key,
+            'X-Goog-FieldMask': 'places.displayName,places.location,places.id',
+          },
+          body: JSON.stringify({
+            includedTypes: ['convenience_store'],
+            maxResultCount: 20,
+            locationRestriction: {
+              circle: {
+                center: { latitude: PORT_LAT, longitude: PORT_LNG },
+                radius: 600.0,
+              },
+            },
+          }),
+        });
+        const data = await res.json();
+        console.log('[Places API New]', data);
+
+        const stores = (data.places || [])
+          .filter(p => /ファミリーマート|familymart/i.test(p.displayName?.text || ''))
+          .map(p => ({
+            name: p.displayName?.text || 'ファミリーマート',
+            placeId: p.id,
+            lat: p.location.latitude,
+            lng: p.location.longitude,
+            dist: Math.round(calcDistance(PORT_LAT, PORT_LNG, p.location.latitude, p.location.longitude)),
+          }))
+          .filter(s => s.dist <= RADIUS)
+          .sort((a, b) => a.dist - b.dist);
+
+        document.getElementById('map-loading').style.display = 'none';
+
+        if (!stores.length) {
+          document.getElementById('nearest-store-name').textContent = '300m以内に店舗が見つかりませんでした';
+          document.getElementById('nearest-store-dist').textContent = JSON.stringify(data).slice(0, 100);
+          return;
+        }
+
+        selectedStore = stores[0];
+
+        stores.forEach((s, i) => {
+          const isNearest = i === 0;
+          const marker = new google.maps.Marker({
+            position: { lat: s.lat, lng: s.lng },
+            map: leafletMap,
+            title: s.name,
+            icon: {
+              url: isNearest
+                ? 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+                : 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+              scaledSize: new google.maps.Size(isNearest ? 44 : 32, isNearest ? 44 : 32),
+            },
+            zIndex: isNearest ? 9 : 1,
+          });
+          const info = new google.maps.InfoWindow({ content: `<b>${s.name}</b><br>約${s.dist}m` });
+          marker.addListener('click', () => info.open(leafletMap, marker));
+          window._mapMarkers.push(marker);
+        });
+
+        document.getElementById('nearest-store-name').textContent = selectedStore.name;
+        document.getElementById('nearest-store-dist').textContent = `📍 到着ポートから約 ${selectedStore.dist}m`;
+
+      } catch(e) {
+        document.getElementById('map-loading').style.display = 'none';
+        document.getElementById('nearest-store-name').textContent = 'エラーが発生しました';
+        document.getElementById('nearest-store-dist').textContent = String(e);
+        console.error(e);
+      }
+    }
+
+    searchFamilyMart();
+  }
+
+
+  function goToCamera() {
+    showScreen('camera');
+  }
+
+
+  function checkApiKey() {
+    const ant = document.getElementById('api-key-input').value.trim();
+    const gm  = document.getElementById('gmaps-key-input').value.trim();
+    document.getElementById('apikey-btn').disabled = !(ant.startsWith('sk-ant-') && gm.startsWith('AIza'));
+  }
+
+  function saveApiKey() {
+    const ant = document.getElementById('api-key-input').value.trim();
+    const gm  = document.getElementById('gmaps-key-input').value.trim();
+    localStorage.setItem('anthropic_key', ant);
+    localStorage.setItem('gmaps_key', gm);
+    loadGoogleMaps(gm, function() { showScreen('complete'); });
+  }
+
+  function getApiKey() {
+    return localStorage.getItem('anthropic_key') || '';
+  }
+
+  function getGmapsKey() {
+    return localStorage.getItem('gmaps_key') || '';
+  }
+
+  function loadGoogleMaps(key, callback) {
+    if (window.google && window.google.maps) { callback(); return; }
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}`;
+    s.onload = callback;
+    document.head.appendChild(s);
+  }
+
+  window.onload = function() {
+    const ant = localStorage.getItem('anthropic_key');
+    const gm  = localStorage.getItem('gmaps_key');
+    if (ant && ant.startsWith('sk-ant-') && gm && gm.startsWith('AIza')) {
+      document.getElementById('api-key-input').value = ant;
+      document.getElementById('gmaps-key-input').value = gm;
+      loadGoogleMaps(gm, function() { showScreen('complete'); });
+    }
+  };
+
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    if (name === 'map')    setTimeout(initMap, 50);
+    if (name === 'camera') setTimeout(startCamera, 100);
+  }
+
+  function goToCamera() {
+    showScreen('camera');
+  }
+
+  let cameraStream = null;
+
+  function startCamera() {
+    const video = document.getElementById('camera-video');
+    if (cameraStream) return;
+    // iOSのChromeはexact指定が失敗することがあるため、
+    // 複数の背面カメラ指定を試し、最後まで失敗したらエラー表示
+    // 前面カメラ({ video: true })へのフォールバックは行わない
+    const constraints = [
+      { video: { facingMode: { exact: 'environment' } }, audio: false },
+      { video: { facingMode: 'environment' }, audio: false },
+      { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+    ];
+    function tryNext(i) {
+      if (i >= constraints.length) {
+        document.getElementById('ocr-status').textContent = 'カメラを起動できませんでした';
+        return;
+      }
+      navigator.mediaDevices.getUserMedia(constraints[i])
+        .then(stream => {
+          // 取得したストリームが本当に背面カメラか確認
+          const track = stream.getVideoTracks()[0];
+          const settings = track.getSettings ? track.getSettings() : {};
+          if (settings.facingMode === 'user') {
+            // 前面カメラが来てしまったら止めて次を試す
+            stream.getTracks().forEach(t => t.stop());
+            tryNext(i + 1);
+            return;
+          }
+          cameraStream = stream;
+          video.srcObject = stream;
+          video.style.display = 'block';
+          document.getElementById('preview-img').style.display = 'none';
+          document.getElementById('camera-guide').style.display = 'flex';
+          document.getElementById('shoot-area').style.display = 'flex';
+          document.getElementById('send-area').style.display = 'none';
+          imageBase64 = null;
+        })
+        .catch(() => tryNext(i + 1));
+    }
+    tryNext(0);
+  }
+
+  function stopCamera() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      cameraStream = null;
+    }
+    const video = document.getElementById('camera-video');
+    if (video) video.srcObject = null;
+  }
+
+  function capturePhoto() {
+    const video = document.getElementById('camera-video');
+    if (!video || !video.videoWidth) return;
+
+    // Step1: 元画像をそのままcanvasに描画
+    const raw = document.createElement('canvas');
+    raw.width  = video.videoWidth;
+    raw.height = video.videoHeight;
+    raw.getContext('2d').drawImage(video, 0, 0);
+
+    // Step2: グレースケール + コントラスト強化 + 輝度微調整
+    const processed = document.createElement('canvas');
+    processed.width  = raw.width;
+    processed.height = raw.height;
+    const ctx = processed.getContext('2d');
+    ctx.filter = 'grayscale(1) contrast(2.0) brightness(1.15)';
+    ctx.drawImage(raw, 0, 0);
+
+    // プレビューは元画像（確認しやすいため）、API送信は処理済み画像
+    const previewUrl   = raw.toDataURL('image/jpeg', 0.92);
+    const processedUrl = processed.toDataURL('image/jpeg', 0.95);
+
+    // stopCamera()を呼ばずストリームを維持 → 撮り直し時に再許可不要
+    showPreview(previewUrl, processedUrl);
+  }
+
+  function retakePhoto() {
+    imageBase64 = null;
+    document.getElementById('preview-img').style.display = 'none';
+    document.getElementById('send-area').style.display = 'none';
+    document.getElementById('shoot-area').style.display = 'flex';
+    document.getElementById('ocr-status').textContent = '';
+    document.getElementById('file-input').value = '';
+    const video = document.getElementById('camera-video');
+    if (cameraStream) {
+      // ストリームが生きていればそのままvideoに戻すだけ
+      video.srcObject = cameraStream;
+      video.style.display = 'block';
+      document.getElementById('camera-guide').style.display = 'flex';
+    } else {
+      startCamera();
+    }
+  }
+
+  function showPreview(previewJpeg, processedJpeg) {
+    // API送信用は処理済み画像、プレビュー表示は元画像
+    imageBase64 = (processedJpeg || previewJpeg).split(',')[1];
+    const preview = document.getElementById('preview-img');
+    preview.src = previewJpeg;
+    preview.style.display = 'block';
+    document.getElementById('camera-video').style.display = 'none';
+    document.getElementById('camera-guide').style.display = 'none';
+    document.getElementById('shoot-area').style.display = 'none';
+    document.getElementById('send-area').style.display = 'flex';
+  }
+
+  function handleFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        const MAX = 1600;
+        let w = img.width, h = img.height;
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        stopCamera();
+        showPreview(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyzeReceipt() {
+    if (!imageBase64) return;
+    const apiKey = getApiKey();
+    if (!apiKey) { showScreen('apikey'); return; }
+
+    stopCamera();
+    document.getElementById('submit-btn').disabled = true;
+    document.getElementById('spinner').style.display = 'block';
+    document.getElementById('ocr-status').textContent = 'レシートを確認中...';
+
+    try {
+      await new Promise(r => setTimeout(r, 400));
+      document.getElementById('ocr-status').textContent = '商品を確認中...';
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
+              { type: 'text', text: `あなたはレシートの文字起こし専用システムです。
+
+【絶対に守るルール】
+- 画像に写っている文字だけを書き出す
+- 見えない・不鮮明な文字は絶対に補完しない（「?」とする）
+- 知識や文脈から文字を推測・補完することを禁止する
+- 存在しない文字・単語を追加しない
+- レシートらしい内容に「合わせる」ことを禁止する
+
+【出力形式】
+- レシートの文字を上から順にそのまま書き出す
+- 加工・整形・要約しない
+- 説明文・コメントを加えない` }
+            ]
+          }]
+        })
+      });
+
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === 'text')?.text || '';
+
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('submit-btn').disabled = false;
+      document.getElementById('ocr-status').textContent = '';
+
+      const isFamilyMart = /familymart|ファミリーマート|ファミマ/i.test(text);
+      const hasTargetProduct = /クロレッツ|ｸﾛﾚｯﾂ|clorets/i.test(text);
+      const isBlurry = text.length < 30;
+
+      if (isFamilyMart && hasTargetProduct) {
+        const exp = new Date(); exp.setDate(exp.getDate() + 30);
+        const expStr = exp.getFullYear() + '/' + String(exp.getMonth()+1).padStart(2,'0') + '/' + String(exp.getDate()).padStart(2,'0');
+        document.getElementById('coupon-expiry').textContent = '有効期限：' + expStr + ' 23:59';
+        showScreen('coupon');
+      } else {
+        const errors = {
+          blurry:      { icon: '🔍', title: '読み取りに失敗しました',  sub: '明るい場所でもう一度撮影してください' },
+          wrong_store: { icon: '🏪', title: '対象外のレシートです',     sub: 'ファミリーマートのレシートを撮影してください' },
+          no_product:  { icon: '🛒', title: '対象商品が見つかりません', sub: 'クロレッツが含まれるレシートをご使用ください' },
+        };
+        const type = isBlurry ? 'blurry' : !isFamilyMart ? 'wrong_store' : 'no_product';
+        const e = errors[type];
+        document.getElementById('error-icon').textContent = e.icon;
+        document.getElementById('error-title').textContent = e.title;
+        document.getElementById('error-sub').textContent = e.sub;
+        document.getElementById('debug-area').style.display = 'block';
+        document.getElementById('debug-text').textContent = text || JSON.stringify(data);
+        showScreen('error');
+      }
+    } catch(err) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('submit-btn').disabled = false;
+      document.getElementById('error-icon').textContent = '⚠️';
+      document.getElementById('error-title').textContent = 'エラーが発生しました';
+      document.getElementById('error-sub').textContent = String(err);
+      document.getElementById('debug-area').style.display = 'block';
+      document.getElementById('debug-text').textContent = '例外発生: ' + String(err);
+      showScreen('error');
+    }
+  }
+</script>
+</body>
+</html>
