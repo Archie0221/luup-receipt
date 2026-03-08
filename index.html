@@ -520,10 +520,20 @@
         }
       );
       const visionData = await visionRes.json();
-      const text = visionData.responses?.[0]?.textAnnotations?.[0]?.description || '';
 
+      // Vision APIのエラーをそのまま表示してデバッグ
+      if (visionData.error || visionData.responses?.[0]?.error) {
+        const err = visionData.error || visionData.responses[0].error;
+        throw new Error(`Vision API エラー: ${err.code} ${err.message}`);
+      }
+
+      const text = visionData.responses?.[0]?.textAnnotations?.[0]?.description
+                || visionData.responses?.[0]?.fullTextAnnotation?.text
+                || '';
+
+      // デバッグ：生レスポンスをエラー画面に表示
       if (!text || text.length < 10) {
-        throw new Error('テキストを読み取れませんでした。明るい場所で撮り直してください。');
+        throw new Error('OCR結果なし。レスポンス: ' + JSON.stringify(visionData).slice(0, 300));
       }
 
       document.getElementById('ocr-status').textContent = '商品を確認中...';
