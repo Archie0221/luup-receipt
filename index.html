@@ -176,6 +176,11 @@
       </div>
     </div>
     <button class="btn-primary" onclick="showScreen('complete')">🎟️ クーポンを取得する</button>
+    <!-- OCR読み込み結果 -->
+    <details style="width:100%;border-radius:12px;background:#f5f5f5;padding:12px;font-size:11px;color:#666;">
+      <summary style="cursor:pointer;font-weight:700;color:#444;">📄 読み込んだレシート内容</summary>
+      <pre id="ocr-result-coupon" style="margin:8px 0 0;white-space:pre-wrap;font-family:monospace;line-height:1.6;"></pre>
+    </details>
   </div>
 </div>
 
@@ -188,10 +193,11 @@
     <div id="error-title" style="font-size:20px;font-weight:700;color:#222;text-align:center"></div>
     <div id="error-sub" style="font-size:14px;color:#888;text-align:center;line-height:1.8"></div>
     <button class="btn-primary" onclick="showScreen('camera')">📸 もう一度撮影する</button>
-    <details id="debug-area" style="width:100%;font-size:11px;color:#666;word-break:break-all;background:#f9f9f9;padding:10px;border-radius:8px;display:none">
-      <summary style="cursor:pointer;font-weight:700">APIレスポンス（デバッグ）</summary>
-      <pre id="debug-text" style="margin:8px 0 0;white-space:pre-wrap;font-family:monospace"></pre>
-    </details>
+    <!-- OCR読み込み結果（常時表示） -->
+    <div style="width:100%;border-radius:12px;background:#f5f5f5;padding:12px;">
+      <div style="font-size:12px;font-weight:700;color:#444;margin-bottom:6px;">📄 読み込んだレシート内容</div>
+      <pre id="ocr-result-error" style="font-size:11px;color:#666;white-space:pre-wrap;font-family:monospace;line-height:1.6;max-height:200px;overflow-y:auto;"></pre>
+    </div>
     <button class="btn-secondary" onclick="showScreen('complete')">閉じる</button>
   </div>
 </div>
@@ -601,6 +607,7 @@
         const exp = new Date(); exp.setDate(exp.getDate() + 30);
         const expStr = exp.getFullYear() + '/' + String(exp.getMonth()+1).padStart(2,'0') + '/' + String(exp.getDate()).padStart(2,'0');
         document.getElementById('coupon-expiry').textContent = '有効期限：' + expStr + ' 23:59';
+        document.getElementById('ocr-result-coupon').textContent = text;
         showScreen('coupon');
       } else {
         const errors = {
@@ -613,8 +620,7 @@
         document.getElementById('error-icon').textContent = e.icon;
         document.getElementById('error-title').textContent = e.title;
         document.getElementById('error-sub').textContent = e.sub;
-        document.getElementById('debug-area').style.display = 'block';
-        document.getElementById('debug-text').textContent = text || JSON.stringify(data);
+        document.getElementById('ocr-result-error').textContent = text || '（テキストを取得できませんでした）';
         showScreen('error');
       }
     } catch(err) {
