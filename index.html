@@ -401,7 +401,7 @@
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('screen-' + name).classList.add('active');
     if (name === 'map')    setTimeout(initMap, 50);
-    if (name === 'camera') setTimeout(startCamera, 100);
+    if (name === 'camera') setTimeout(openCamera, 100);
   }
 
   function goToCamera() {
@@ -410,6 +410,18 @@
 
   let cameraStream = null;
   let rafId = null;
+
+  function openCamera() {
+    // UIを必ずライブカメラ表示状態にリセット
+    imageBase64 = null;
+    document.getElementById('preview-img').style.display = 'none';
+    document.getElementById('camera-canvas').style.display = 'block';
+    document.getElementById('camera-guide').style.display = 'flex';
+    document.getElementById('shoot-area').style.display = 'flex';
+    document.getElementById('send-area').style.display = 'none';
+    document.getElementById('ocr-status').textContent = '';
+    startCamera();
+  }
 
   function startCamera() {
     if (cameraStream) return;
