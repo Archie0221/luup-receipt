@@ -27,7 +27,17 @@
     overflow: hidden;
     min-height: 0;
   }
-  #camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #camera-video {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    /* iOSが自動表示する再生コントロールを非表示 */
+    -webkit-media-controls: none;
+    pointer-events: none;
+  }
+  #camera-video::-webkit-media-controls { display: none !important; }
+  #camera-video::-webkit-media-controls-enclosure { display: none !important; }
+  #camera-video::-webkit-media-controls-panel { display: none !important; }
+  #camera-video::-webkit-media-controls-play-button { display: none !important; }
+  #camera-video::-webkit-media-controls-overlay-play-button { display: none !important; }
   #preview-img  { display: none; width: 100%; height: 100%; object-fit: contain; background: #000; }
   #camera-controls {
     flex-shrink: 0;
