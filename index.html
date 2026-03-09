@@ -292,11 +292,8 @@
       </div>
     </div>
     <button class="btn-primary" onclick="showScreen('complete')">🎟️ クーポンを取得する</button>
-    <!-- OCR読み込み結果 -->
-    <details style="width:100%;border-radius:12px;background:#f5f5f5;padding:12px;font-size:11px;color:#666;">
-      <summary style="cursor:pointer;font-weight:700;color:#444;">📄 読み込んだレシート内容</summary>
-      <pre id="ocr-result-coupon" style="margin-top:8px;white-space:pre-wrap;font-family:monospace;line-height:1.6;"></pre>
-    </details>
+    <button onclick="showOcrModal()" style="background:transparent;border:1px solid #ddd;border-radius:10px;padding:10px 16px;font-size:12px;color:#888;cursor:pointer;font-family:inherit;width:100%;">📄 読み込んだレシート内容を確認</button>
+    <pre id="ocr-result-coupon" style="display:none;"></pre>
   </div>
 </div>
 
@@ -308,13 +305,8 @@
     <div id="error-title" style="font-size:20px;font-weight:700;color:#222;text-align:center"></div>
     <div id="error-sub" style="font-size:14px;color:#888;text-align:center;line-height:1.8"></div>
     <button class="btn-primary" onclick="showScreen('camera')">📸 もう一度撮影する</button>
-    <!-- OCR読み込み結果（常時表示） -->
-    <div style="width:100%;border-radius:12px;background:#f5f5f5;padding:12px;">
-      <div style="font-size:12px;font-weight:700;color:#444;margin-bottom:6px;">📄 読み込んだレシート内容</div>
-      <div style="max-height:300px;overflow-y:scroll;-webkit-overflow-scrolling:touch;">
-        <pre id="ocr-result-error" style="font-size:11px;color:#666;white-space:pre-wrap;font-family:monospace;line-height:1.6;margin:0;"></pre>
-      </div>
-    </div>
+    <button onclick="showOcrModal()" style="background:transparent;border:1px solid #ddd;border-radius:10px;padding:10px 16px;font-size:12px;color:#888;cursor:pointer;font-family:inherit;width:100%;">📄 読み込んだレシート内容を確認</button>
+    <pre id="ocr-result-error" style="display:none;"></pre>
     <button class="btn-secondary" onclick="showScreen('complete')">閉じる</button>
   </div>
 </div>
@@ -730,6 +722,30 @@ ${text}`
       showScreen('error');
     }
   }
+
+  function showOcrModal() {
+    const couponText = document.getElementById('ocr-result-coupon').textContent;
+    const errorText  = document.getElementById('ocr-result-error').textContent;
+    const text = couponText || errorText || '（テキストなし）';
+    document.getElementById('ocr-modal-text').textContent = text;
+    const modal = document.getElementById('ocr-modal');
+    modal.style.display = 'flex';
+  }
+
+  function hideOcrModal() {
+    document.getElementById('ocr-modal').style.display = 'none';
+  }
 </script>
+<!-- OCR全文モーダル -->
+<div id="ocr-modal" style="display:none;position:fixed;inset:0;background:#fff;z-index:99999;flex-direction:column;">
+  <div style="flex-shrink:0;padding:12px 20px;padding-top:max(12px,env(safe-area-inset-top,12px));border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;">
+    <span style="font-size:15px;font-weight:700;color:#222;">📄 読み込んだレシート内容</span>
+    <button onclick="hideOcrModal()" style="background:transparent;border:none;font-size:24px;color:#888;cursor:pointer;padding:4px 8px;">✕</button>
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 20px;padding-bottom:max(24px,env(safe-area-inset-bottom,24px));">
+    <pre id="ocr-modal-text" style="font-size:12px;color:#444;white-space:pre-wrap;font-family:monospace;line-height:1.8;margin:0;"></pre>
+  </div>
+</div>
+
 </body>
 </html>
