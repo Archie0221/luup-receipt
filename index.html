@@ -295,7 +295,9 @@
     <!-- OCR読み込み結果 -->
     <details style="width:100%;border-radius:12px;background:#f5f5f5;padding:12px;font-size:11px;color:#666;">
       <summary style="cursor:pointer;font-weight:700;color:#444;">📄 読み込んだレシート内容</summary>
-      <pre id="ocr-result-coupon" style="margin:8px 0 0;white-space:pre-wrap;font-family:monospace;line-height:1.6;max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></pre>
+      <div style="max-height:300px;overflow-y:scroll;-webkit-overflow-scrolling:touch;margin-top:8px;">
+        <pre id="ocr-result-coupon" style="white-space:pre-wrap;font-family:monospace;line-height:1.6;margin:0;"></pre>
+      </div>
     </details>
   </div>
 </div>
@@ -311,7 +313,9 @@
     <!-- OCR読み込み結果（常時表示） -->
     <div style="width:100%;border-radius:12px;background:#f5f5f5;padding:12px;">
       <div style="font-size:12px;font-weight:700;color:#444;margin-bottom:6px;">📄 読み込んだレシート内容</div>
-      <pre id="ocr-result-error" style="font-size:11px;color:#666;white-space:pre-wrap;font-family:monospace;line-height:1.6;max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></pre>
+      <div style="max-height:300px;overflow-y:scroll;-webkit-overflow-scrolling:touch;">
+        <pre id="ocr-result-error" style="font-size:11px;color:#666;white-space:pre-wrap;font-family:monospace;line-height:1.6;margin:0;"></pre>
+      </div>
     </div>
     <button class="btn-secondary" onclick="showScreen('complete')">閉じる</button>
   </div>
@@ -676,8 +680,9 @@
           messages: [{
             role: 'user',
             content: `以下のレシートテキストを見て、JSONのみで答えてください。
-{"is_familymart": true/false, "has_clorets": true/false}
+{"is_familymart": true/false, "is_target_store": true/false, "has_clorets": true/false}
 ・is_familymart: ファミリーマートのレシートか
+・is_target_store: 店舗名に「池尻三丁目」が含まれるか
 ・has_clorets: クロレッツ（クロレッツXP等含む）が購入品目にあるか
 JSONのみ返答し、説明不要。
 
@@ -695,7 +700,7 @@ ${text}`
       document.getElementById('submit-btn').disabled = false;
       document.getElementById('ocr-status').textContent = '';
 
-      if (result.is_familymart && result.has_clorets) {
+      if (result.is_familymart && result.is_target_store && result.has_clorets) {
         const exp = new Date(); exp.setDate(exp.getDate() + 30);
         const expStr = exp.getFullYear() + '/' + String(exp.getMonth()+1).padStart(2,'0') + '/' + String(exp.getDate()).padStart(2,'0');
         document.getElementById('coupon-expiry').textContent = '有効期限：' + expStr + ' 23:59';
@@ -703,10 +708,13 @@ ${text}`
         showScreen('coupon');
       } else {
         const errors = {
-          wrong_store: { icon: '🏪', title: '対象外のレシートです',     sub: 'ファミリーマートのレシートを撮影してください' },
-          no_product:  { icon: '🛒', title: '対象商品が見つかりません', sub: 'クロレッツが含まれるレシートをご使用ください' },
+          wrong_store:        { icon: '🏪', title: '対象外のレシートです',       sub: 'ファミリーマートのレシートを撮影してください' },
+          wrong_store_target: { icon: '📍', title: '対象店舗外のレシートです',   sub: '対象はファミリーマート池尻三丁目店のみです' },
+          no_product:         { icon: '🛒', title: '対象商品が見つかりません',   sub: 'クロレッツが含まれるレシートをご使用ください' },
         };
-        const type = !result.is_familymart ? 'wrong_store' : 'no_product';
+        const type = !result.is_familymart ? 'wrong_store'
+                   : !result.is_target_store ? 'wrong_store_target'
+                   : 'no_product';
         const e = errors[type];
         document.getElementById('error-icon').textContent = e.icon;
         document.getElementById('error-title').textContent = e.title;
